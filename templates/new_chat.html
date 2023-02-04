@@ -1,0 +1,85 @@
+{% extends 'home.html' %}
+
+{% block body %}
+
+<script type="text/javascript">
+
+    setupWebSocket()
+
+    function setupWebSocket() {
+
+        console.log("setupWebSocket: ")
+
+        // Correctly decide between ws:// and wss://
+        var ws_scheme = window.location.protocol == "https:" ? "wss" : "ws";
+        var ws_path = ws_scheme + '://' + window.location.host + "/chat/" ; // development
+        
+
+
+        // console.log("Connecting to " + ws_path);
+        chatSocket = new WebSocket(ws_path);
+
+        // Handle incoming messages
+        chatSocket.onmessage = function (message) {
+            // Decode the JSON
+            // console.log("Got chat websocket message " + message.data);
+            console.log("Got websocket message.");
+            var data = JSON.parse(message.data);
+            console.log(data)
+
+
+            // Handle errors (ClientError)
+            if (data.error) {
+                console.error(data.error + ": " + data.message)
+                return;
+            }
+            // Handle joining (Client perspective)
+            if (data.join) {
+                console.log("Joining room " + data.join);
+            }
+            // Handle leaving (client perspective)
+            if (data.leave) {
+                // do nothing
+                console.log("Leaving room " + data.leave);
+            }
+            if (data.general_message_type) {
+                console.log("User" + data.user);
+            }
+            if(data.msg){
+                console.log(data.msg);
+            }
+        };
+
+        chatSocket.addEventListener("open", function (e) {
+            console.log("ChatSocket OPEN")
+            // join chat room
+            if ("{{request.user.is_authenticated}}") {
+                chatSocket.send(JSON.stringify({
+                    "command": "join",
+                }));
+            }
+        })
+
+        chatSocket.onclose = function (e) {
+            console.log('Chat socket closed.');
+        };
+
+        chatSocket.onOpen = function (e) {
+            console.log("ChatSocket onOpen", e)
+        }
+
+        chatSocket.onerror = function (e) {
+            console.log('ChatSocket error', e)
+        }
+
+        if (chatSocket.readyState == WebSocket.OPEN) {
+            console.log("ChatSocket OPEN")
+        } else if (chatSocket.readyState == WebSocket.CONNECTING) {
+            console.log("ChatSocket connecting..")
+        }
+    }
+
+   
+</script>
+
+{% endblock body %}
