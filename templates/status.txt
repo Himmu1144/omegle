@@ -1,0 +1,4 @@
+this is the final version of omegle Text now.
+version 1 omegle
+
+This version has a bug in it , the skip for user 1 doesn't work and end up in an error. the skid does work for the user 2 though.

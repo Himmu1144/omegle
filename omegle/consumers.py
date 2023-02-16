@@ -78,10 +78,12 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 print(content['user1_id'])
                 print(content['message'])
                 await self.send_room(content["group_name"], content['user1_id'], content["message"])
-            elif command == "get_room_chat_messages":
-                pass
-            elif command == "get_user_info":
-                pass
+            elif command == "txt_bar":
+                await self.send_bar(content['group_name'], content['display'], content['user_id'])
+            elif command == "stop_txt_bar":
+                await self.send_bar_stop(content['group_name'], content['display'], content['user_id'])
+            elif command == 'skip':
+                await self.disconnect(0)
         except ClientError as e:
             await self.handle_client_error(e)
             print('command stopped here')
@@ -105,7 +107,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             str(group_name),
             {
                 "type": "chat.message",
-                "username": "id : " + str(user1_id),
+                "username": str(user1_id),
                 "message": message,
             }
         )
@@ -126,31 +128,71 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             },
         )
 
+    async def send_bar(self,group_name,boolean, user_id):
+        await self.channel_layer.group_send(
+            str(group_name),
+            {
+                "type": "bar.message",
+                'display' : True,
+                'user_id' : user_id,
+            }
+        )
 
+    async def bar_message(self, event):
+        await self.send_json(
+            {
+                "msg_type": 2,
+                "user_id": event["user_id"],
+                "display": event["display"],
+            },
+        )
+
+    async def send_bar_stop(self,group_name,boolean, user_id):
+        await self.channel_layer.group_send(
+            str(group_name),
+            {
+                "type": "stop.bar.message",
+                'display' : False,
+                'user_id' : user_id,
+            }
+        )
+
+    async def stop_bar_message(self, event):
+        await self.send_json(
+            {
+                "msg_type": 3,
+                "user_id": event["user_id"],
+                "display": event["display"],
+            },
+        )
 
     async def disconnect(self, code):
         """
         Called when the WebSocket closes for any reason.
         """
+        
         user1 = await get_user(self.id)
         group_name = await fetch_group(user1)
-        group_name = str(group_name)
+        user2_id = await fetch_user2_from_group(user1,self.id)
+        
 
         await self.channel_layer.group_send(
             group_name,
             {
                 "type": "leave.message",
                 "spinner": 'Chat Disconnected',
-                "id" : user1.id,
+                "id" : self.id,
             }
         )
-
+        
         await self.channel_layer.group_discard(
 			group_name,
 			self.channel_name,
 		)
         print(f'Group - {group_name} Discarded')
         await delete_user(self.id)
+        await delete_user(user2_id)
+        # await delete_user(user2_id)
         print('User deleted')
 
       
@@ -167,6 +209,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             },
         )
 
+    
 
     # async def join_room(self, room_id):
     #     """
@@ -282,6 +325,7 @@ def fetch_group(user):
         group_name = None
     return group_name
 
+
 @database_sync_to_async
 def fetch_group_id(id):
     try:
@@ -290,6 +334,18 @@ def fetch_group_id(id):
     except:
         group_name = None
     return group_name
+
+@database_sync_to_async
+def fetch_user2_from_group(user, user1_id):
+    try:
+        group_name = GroupConnect.objects.get(Q(user1=user)|Q(user2=user))
+        user2_id = group_name.user2.id
+        if user1_id == user2_id:
+            user2_id = group_name.user1.id
+    except:
+        user2_id = None
+    return user2_id
+
 
 class ClientError(Exception):
     """
