@@ -86,302 +86,493 @@
     #txt-container {
         display: none;
     }
-    #skip{
+
+    #skip {
         padding: 0em 0.5em;
     }
-    .new_chat_container{
-        display : flex;
-        justify-content : center;
+
+    .new_chat_container {
+        display: flex;
+        justify-content: center;
     }
 </style>
 
-<div class="card mt-3 container">
-    <div class="card-header">
-        <div class="d-flex flex-row justify-content-between">
-            <h3 class="">Omegle</h3>
-            <div class="d-flex flex-row align-items-center">
-                <span class="material-icons m-auto pr-1 connected-users-icon">person_outline</span>
-            </div>
+<div class="card mt-3">
+    <div class="box d-flex">
 
+        <div class="py-2 ">
+            <div class="col-sm">
+                <video height="300" id="remote"></video>
+            </div>
+            <div class="col-sm">
+                <video height="300" id="ours"></video>
+            </div>
         </div>
-    </div>
-    <div class="card-body p-1">
-        <div class="d-flex flex-column" id="id_chat_log_container">
-            <div class="d-flex flex-row justify-content-center" id="id_chatroom_loading_spinner_container">
-                <div class="text-primary" id="id_chatroom_loading_spinner" role="status" style="display: block; ">
-                    <span id='bar'>looking for someone you can chat with....</span>
+        <div class="text col-8">
+            <div class="card-header">
+                <div class="d-flex flex-row justify-content-between">
+                    <h3 class="">Omegle</h3>
+                    <div class="d-flex flex-row align-items-center">
+                        <span class="material-icons m-auto pr-1 connected-users-icon">person_outline</span>
+                    </div>
+
                 </div>
             </div>
-            <div class="d-flex chat-log" id="id_chat_log">
-            </div>
-            <div id="txt_bar" style='display: none;'>Stranger is typing...</div>
-            <div class="new_chat_container">
-                <a href="{% url 'new-chat' %}"><button type="button" id='new_chat' class="btn btn-primary"
-                        style="display: none;">New Chat</button></a>
-            </div>
-            <div id="txt-container">
-                <div class="d-flex chat-message-input-container" id='chat-message-input-container'>
-                    <button class="btn btn-primary chat-message-submit-button" id='skip_btn'>
-                        <span id="skip" class="">skip</span>
-                    </button>
-                    <textarea class="flex-grow-1 chat-message-input" id="id_chat_message_input"
-                        oninput='type_bar()'></textarea>
-                    <button class="btn btn-primary chat-message-submit-button">
-                        <span id="id_chat_message_submit" class="material-icons">send
-                        </span>
-                    </button>
+            <div class="card-body p-1">
+                <div class="d-flex flex-column" id="id_chat_log_container">
+                    <div class="d-flex flex-row justify-content-center" id="id_chatroom_loading_spinner_container">
+                        <div class="text-primary" id="id_chatroom_loading_spinner" role="status"
+                            style="display: block; ">
+                            <span id='bar'>looking for someone you can chat with....</span>
+                        </div>
+                    </div>
+                    <div class="d-flex chat-log" id="id_chat_log">
+                    </div>
+                    <div id="txt_bar" style='display: none;'>Stranger is typing...</div>
+                    <div class="new_chat_container">
+                        <a href="{% url 'new-chat' %}"><button type="button" id='new_chat' class="btn btn-primary"
+                                style="display: none;">New Chat</button></a>
+                    </div>
+                    <div id="txt-container">
+                        <div class="d-flex chat-message-input-container" id='chat-message-input-container'>
+                            <button class="btn btn-primary chat-message-submit-button" id='skip_btn'>
+                                <span id="skip" class="">skip</span>
+                            </button>
+                            <textarea class="flex-grow-1 chat-message-input" id="id_chat_message_input"
+                                oninput='type_bar()'></textarea>
+                            <button class="btn btn-primary chat-message-submit-button">
+                                <span id="id_chat_message_submit" class="material-icons">send
+                                </span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
+<button id="call" style="display: none" class="btn btn-outline-primary my-3 mx-3">
+    Call
+</button>
+
 <script type="text/javascript">
 
+    const our_video = document.getElementById("ours");
+    const remote_video = document.getElementById("remote");
+    const call_btn = document.getElementById("call");
+    let stream;
+    let rtcpeerconnection;
+    let isCreated;
+    const constraints = {
+        'video': true,
+        'audio': true
+    }
+
+    // Contains the stun server URL we will be using.
+    let iceServers = {
+        iceServers: [
+            { urls: "stun:stun.services.mozilla.com" },
+            { urls: "stun:stun.l.google.com:19302" },
+        ],
+    };
 
 
-    setupWebSocket()
+    // setupWebSocket()
 
 
-    function setupWebSocket() {
+    // function setupWebSocket() {
 
-        console.log("setupWebSocket: ")
+    console.log("setupWebSocket: ")
 
-        // Correctly decide between ws:// and wss://
-        var ws_scheme = window.location.protocol == "https:" ? "wss" : "ws";
-        var ws_path = ws_scheme + '://' + window.location.host + "/chat/"; // development
-
-
-
-        // console.log("Connecting to " + ws_path);
-        chatSocket = new WebSocket(ws_path);
-
-        // Handle incoming messages
-        chatSocket.onmessage = function (message) {
-            // Decode the JSON
-            // console.log("Got chat websocket message " + message.data);
-            console.log("Got websocket message.");
-            var data = JSON.parse(message.data);
+    // Correctly decide between ws:// and wss://
+    var ws_scheme = window.location.protocol == "https:" ? "wss" : "ws";
+    var ws_path = ws_scheme + '://' + window.location.host + "/chat/"; // development
 
 
 
-            // Handle errors (ClientError)
-            if (data.error) {
-                console.error(data.error + ": " + data.message)
-                return;
-            }
-            // Handle joining (Client perspective)
-            if (data.join) {
-                console.log("Joining room " + data.join);
-                window.group_name = data.join
-                window.user1_id = data.user1_id
-                displayChatroomLoadingSpinner(data.spinner)
-                var txt = document.getElementById('txt-container')
-                txt.style.display = 'block'
-            }
+    // console.log("Connecting to " + ws_path);
+    chatSocket = new WebSocket(ws_path);
 
-            // Handle getting a message
-            if (data.msg_type == 0) {
-                console.log(data);
-                appendChatMessage(data, true)
-            }
+    // Handle incoming messages
+    chatSocket.onmessage = function (message) {
+        // Decode the JSON
+        // console.log("Got chat websocket message " + message.data);
+        console.log("Got websocket message.");
+        var data = JSON.parse(message.data);
 
-            if (data.msg_type == 1) {
-                console.log(data);
-                if (data.id == window.user1_id) {
-                    var message = 'You have diconnected.'
-                }
-                else {
-                    var message = 'Stranger has disconnected.'
-                }
-                displayChatroomLoadingSpinner(message)
-                var txt = document.getElementById('txt-container')
-                txt.style.display = 'none'
-                var new_chat = document.getElementById('new_chat')
-                new_chat.style.display = 'block'
-            }
 
-            if (data.msg_type == 2) {
-                if (window.user1_id == data.user_id) {
 
-                }
-                else {
-                    var txt_bar = document.getElementById('txt_bar')
-                    txt_bar.style.display = 'block'
-                }
-
-            }
-
-            if (data.msg_type == 3) {
-                if (window.user1_id == data.user_id) {
-
-                }
-                else {
-                    var txt_bar = document.getElementById('txt_bar')
-                    txt_bar.style.display = 'none'
-                }
-
-            }
-                // Handle leaving (client perspective)
-                if (data.leave) {
-                    // do nothing
-                    console.log("Leaving room " + data.leave);
-                }
-                if (data.general_message_type) {
-                    console.log("User" + data.user);
-                }
-                if (data.msg) {
-                    console.log(data.msg);
-                }
-            };
-
-            chatSocket.addEventListener("open", function (e) {
-                console.log("ChatSocket OPEN")
-                // join chat room
-                if ("{{request.user.is_authenticated}}") {
-                    chatSocket.send(JSON.stringify({
-                        "command": "join",
-                    }));
-                }
-            })
-
-            chatSocket.onclose = function (e) {
-                console.log('Chat socket closed.');
-            };
-
-            chatSocket.onOpen = function (e) {
-                console.log("ChatSocket onOpen", e)
-            }
-
-            chatSocket.onerror = function (e) {
-                console.log('ChatSocket error', e)
-            }
-
-            if (chatSocket.readyState == WebSocket.OPEN) {
-                console.log("ChatSocket OPEN")
-            } else if (chatSocket.readyState == WebSocket.CONNECTING) {
-                console.log("ChatSocket connecting..")
-            }
+        // Handle errors (ClientError)
+        if (data.error) {
+            console.error(data.error + ": " + data.message)
+            return;
         }
+        // Handle joining (Client perspective)
+        if (data.join) {
+            console.log("Joining room " + data.join);
+            window.group_name = data.join
+            window.user1_id = data.user1_id
+            displayChatroomLoadingSpinner(data.spinner)
+            var txt = document.getElementById('txt-container')
+            txt.style.display = 'block'
 
-        console.log(window.group_name, 'Can you see the group_name')
-        document.getElementById('id_chat_message_input').focus();
-        document.getElementById('id_chat_message_input').onkeyup = function (e) {
-            if (e.keyCode === 13 && e.shiftKey) {  // enter + return
-                // Handled automatically by textarea
-            }
-            else if (e.keyCode === 13 && !e.shiftKey) { // enter + !return
-                document.getElementById('id_chat_message_submit').click();
-            }
-        };
-
-        document.getElementById('id_chat_message_submit').onclick = function (e) {
-            const messageInputDom = document.getElementById('id_chat_message_input');
-            const message = messageInputDom.value;
-            chatSocket.send(JSON.stringify({
-                "command": "send",
-                "message": message,
-                "group_name": window.group_name,
-                'user1_id': window.user1_id
-            }));
-            chatSocket.send(JSON.stringify({
-                'command' : 'stop_txt_bar',
-                'group_name': window.group_name,
-                'display': 'False',
-                'user_id': window.user1_id,
-            }));
-            //var txt_bar = document.getElementById('txt_bar')
-            //txt_bar.style.display = 'none'
-            messageInputDom.value = '';
-        };
-
-        document.getElementById('skip_btn').onclick = function (e) {
-            const skip = document.getElementById('skip').innerHTML;
-            if(skip=='skip'){
-                console.log('yup really')
-                document.getElementById('skip').innerHTML = 'really?'
-            }
-            else if(skip=='really?'){
-                chatSocket.send(JSON.stringify({
-                    'command' : 'skip',
-                    'group_name': window.group_name,
-                    'user_id': window.user1_id,
-                }));
-            }
-            else{
-                console.log(skip);
-                console.log('check it again')
-            }
-        };
-
-        function appendChatMessage(data, isNewMessage) {
-            message = data['message']
-            uName = data['username']
-            if (uName == window.user1_id) {
-                var username = 'You :'
+            if (data.user == 'user1') {
+                console.log(data.user)
+                window.created = true
             }
             else {
-                var username = 'Stranger :'
-            }
-            var msg = message + '\n';
-            //var username = uName + ": "
-            createChatMessageElement(msg, username, isNewMessage)
-        }
-
-        function createChatMessageElement(msg, username, isNewMessage) {
-            var chatLog = document.getElementById("id_chat_log")
-
-            var newMessageDiv = document.createElement("div")
-            newMessageDiv.classList.add("d-flex")
-            newMessageDiv.classList.add("flex-row")
-            newMessageDiv.classList.add("message-container")
-
-
-            var div1 = document.createElement("div")
-            div1.classList.add("d-flex")
-            div1.classList.add("flex-column")
-
-            var div2 = document.createElement("div")
-            div2.classList.add("d-flex")
-            div2.classList.add("flex-row")
-
-            var usernameSpan = document.createElement("span")
-            usernameSpan.addEventListener("click", function (e) {
-                //selectUser(user_id)
-            })
-            usernameSpan.classList.add("username-span")
-            usernameSpan.innerHTML = username
-            div2.appendChild(usernameSpan)
-
-
-            div1.appendChild(div2)
-
-            var msgP = document.createElement("p")
-            msgP.innerHTML = msg
-            msgP.classList.add("msg-p")
-            div1.appendChild(msgP)
-
-            newMessageDiv.appendChild(div1)
-
-            if (isNewMessage) {
-                chatLog.insertBefore(newMessageDiv, chatLog.firstChild)
+                window.created = false
             }
 
+            if (window.created) {
+                isCreated = true
+                navigator.mediaDevices.getUserMedia(constraints).then(s => {
+                    stream = s;
+                    our_video.srcObject = s;
+                    our_video.onloadedmetadata = () => {
+                        our_video.play()
+                    }
+                })
+                navigator.mediaDevices.getUserMedia(constraints).then(s => {
+                    stream = s;
+                    our_video.srcObject = s;
+                    our_video.onloadedmetadata = () => {
+                        our_video.play()
+                    }
+                })
+                console.log(isCreated)
+                console.log(stream)
+                console.log('setting user1 video')
+
+            }
+            else {
+                isCreated = false
+                navigator.mediaDevices.getUserMedia(constraints).then(s => {
+                    stream = s;
+                    our_video.srcObject = s;
+                    our_video.onloadedmetadata = () => {
+                        our_video.play()
+                    }
+                });
+                console.log(isCreated)
+                console.log(stream)
+                console.log('setting user2 video')
+
+            }
+
+            if (isCreated) {
+                call_btn.style.display = 'block'
+                console.log('sending video command to consumer')
+                chatSocket.send(JSON.stringify({
+                    "command": "video",
+                    "group_name": window.group_name,
+                    'iscreated' : isCreated,
+                }));
+            }
+
         }
 
-        function displayChatroomLoadingSpinner(message) {
-            var spinner = document.getElementById("bar")
-            spinner.innerHTML = message
+        // Handle getting a message
+        if (data.msg_type == 0) {
+            console.log(data);
+            appendChatMessage(data, true)
         }
 
-        function type_bar() {
+        if (data.msg_type == 1) {
+            console.log(data);
+            if (data.id == window.user1_id) {
+                var message = 'You have diconnected.'
+            }
+            else {
+                var message = 'Stranger has disconnected.'
+            }
+            displayChatroomLoadingSpinner(message)
+            var txt = document.getElementById('txt-container')
+            txt.style.display = 'none'
+            var new_chat = document.getElementById('new_chat')
+            new_chat.style.display = 'block'
+        }
+
+        if (data.msg_type == 2) {
+            if (window.user1_id == data.user_id) {
+
+            }
+            else {
+                var txt_bar = document.getElementById('txt_bar')
+                txt_bar.style.display = 'block'
+            }
+
+        }
+
+        if (data.msg_type == 3) {
+            if (window.user1_id == data.user_id) {
+
+            }
+            else {
+                var txt_bar = document.getElementById('txt_bar')
+                txt_bar.style.display = 'none'
+            }
+
+        }
+        // Handle leaving (client perspective)
+        if (data.leave) {
+            console.log('setting null')
+            remote_video.srcObject = null;
+            console.log("Leaving room " + data.leave);
+        }
+        if (data.general_message_type) {
+            console.log("User" + data.user);
+        }
+        if (data.msg) {
+            console.log(data.msg);
+        }
+
+        if (data["command"] == "offer") {
+            if (isCreated == false) {
+                createanswer(data["offer"]);
+            }
+        }
+        if (data["command"] == "answer") {
+            if (isCreated) {
+                rtcpeerconnection.setRemoteDescription(data["answer"]);
+                console.log("answer set as remote");
+            }
+        }
+        if (data["command"] == "candidate") {
+            if (data["iscreated"] != isCreated) {
+                const IceCandidate = new RTCIceCandidate(data["candidate"]);
+                rtcpeerconnection.addIceCandidate(IceCandidate);
+            }
+        }
+
+
+    };
+
+    chatSocket.addEventListener("open", function (e) {
+        console.log("ChatSocket OPEN")
+
+
+        // chatSocket.send(JSON.stringify({
+        //     "command": "join",
+        // }));
+        // }
+    })
+
+    chatSocket.onclose = function (e) {
+        console.log('Chat socket closed.');
+    };
+
+    chatSocket.onOpen = function (e) {
+        console.log("ChatSocket onOpen", e)
+    }
+
+    chatSocket.onerror = function (e) {
+        console.log('ChatSocket error', e)
+    }
+
+    if (chatSocket.readyState == WebSocket.OPEN) {
+        console.log("ChatSocket OPEN")
+
+    } else if (chatSocket.readyState == WebSocket.CONNECTING) {
+        console.log("ChatSocket connecting..")
+    }
+    // }
+
+    console.log(window.group_name, 'Can you see the group_name')
+    document.getElementById('id_chat_message_input').focus();
+    document.getElementById('id_chat_message_input').onkeyup = function (e) {
+        if (e.keyCode === 13 && e.shiftKey) {  // enter + return
+            // Handled automatically by textarea
+        }
+        else if (e.keyCode === 13 && !e.shiftKey) { // enter + !return
+            document.getElementById('id_chat_message_submit').click();
+        }
+    };
+
+    document.getElementById('id_chat_message_submit').onclick = function (e) {
+        const messageInputDom = document.getElementById('id_chat_message_input');
+        const message = messageInputDom.value;
+        chatSocket.send(JSON.stringify({
+            "command": "send",
+            "message": message,
+            "group_name": window.group_name,
+            'user1_id': window.user1_id
+        }));
+        chatSocket.send(JSON.stringify({
+            'command': 'stop_txt_bar',
+            'group_name': window.group_name,
+            'display': 'False',
+            'user_id': window.user1_id,
+        }));
+        //var txt_bar = document.getElementById('txt_bar')
+        //txt_bar.style.display = 'none'
+        messageInputDom.value = '';
+    };
+
+    document.getElementById('skip_btn').onclick = function (e) {
+        const skip = document.getElementById('skip').innerHTML;
+        if (skip == 'skip') {
+            console.log('yup really')
+            document.getElementById('skip').innerHTML = 'really?'
+        }
+        else if (skip == 'really?') {
             chatSocket.send(JSON.stringify({
-                "command": "txt_bar",
+                'command': 'skip',
                 'group_name': window.group_name,
-                'display': 'True',
                 'user_id': window.user1_id,
             }));
         }
+        else {
+            console.log(skip);
+            console.log('check it again')
+        }
+    };
+
+    function appendChatMessage(data, isNewMessage) {
+        message = data['message']
+        uName = data['username']
+        if (uName == window.user1_id) {
+            var username = 'You :'
+        }
+        else {
+            var username = 'Stranger :'
+        }
+        var msg = message + '\n';
+        //var username = uName + ": "
+        createChatMessageElement(msg, username, isNewMessage)
+    }
+
+    function createChatMessageElement(msg, username, isNewMessage) {
+        var chatLog = document.getElementById("id_chat_log")
+
+        var newMessageDiv = document.createElement("div")
+        newMessageDiv.classList.add("d-flex")
+        newMessageDiv.classList.add("flex-row")
+        newMessageDiv.classList.add("message-container")
+
+
+        var div1 = document.createElement("div")
+        div1.classList.add("d-flex")
+        div1.classList.add("flex-column")
+
+        var div2 = document.createElement("div")
+        div2.classList.add("d-flex")
+        div2.classList.add("flex-row")
+
+        var usernameSpan = document.createElement("span")
+        usernameSpan.addEventListener("click", function (e) {
+            //selectUser(user_id)
+        })
+        usernameSpan.classList.add("username-span")
+        usernameSpan.innerHTML = username
+        div2.appendChild(usernameSpan)
+
+
+        div1.appendChild(div2)
+
+        var msgP = document.createElement("p")
+        msgP.innerHTML = msg
+        msgP.classList.add("msg-p")
+        div1.appendChild(msgP)
+
+        newMessageDiv.appendChild(div1)
+
+        if (isNewMessage) {
+            chatLog.insertBefore(newMessageDiv, chatLog.firstChild)
+        }
+
+    }
+
+    function displayChatroomLoadingSpinner(message) {
+        var spinner = document.getElementById("bar")
+        spinner.innerHTML = message
+    }
+
+    function type_bar() {
+        chatSocket.send(JSON.stringify({
+            "command": "txt_bar",
+            'group_name': window.group_name,
+            'display': 'True',
+            'user_id': window.user1_id,
+        }));
+    }
+
+    call_btn.onclick = () => {
+        createoffer()
+    }
+
+    function createoffer() {
+        rtcpeerconnection = new RTCPeerConnection(iceServers)
+        rtcpeerconnection.onicecandidate = OnIceCandidateFunc;
+        rtcpeerconnection.ontrack = OnTrackFunc;
+        stream.getTracks().forEach((track) => {
+            rtcpeerconnection.addTrack(track, stream);
+        });
+        rtcpeerconnection.createOffer().then((offer) => {
+            rtcpeerconnection.setLocalDescription(offer);
+            chatSocket.send(
+                JSON.stringify({
+                    command: "offer",
+                    offer: offer,
+                    room: window.group_name,
+                })
+            );
+        });
+
+    }
+
+    function OnIceCandidateFunc(e) {
+        if (e.candidate) {
+            chatSocket.send(
+                JSON.stringify({
+                    command: "candidate",
+                    candidate: e.candidate,
+                    iscreated: isCreated,
+                    room: window.group_name,
+                })
+            );
+        }
+    }
+
+    function OnTrackFunc(e) {
+        remote_video.srcObject = e.streams[0];
+        remote_video.onloadedmetadata = () => {
+            remote_video.play();
+        };
+    }
+
+    function createanswer(offer) {
+        console.log("answer started");
+        rtcpeerconnection = new RTCPeerConnection(iceServers);
+        rtcpeerconnection.onicecandidate = OnIceCandidateFunc;
+        rtcpeerconnection.ontrack = OnTrackFunc;
+        stream.getTracks().forEach((track) => {
+            rtcpeerconnection.addTrack(track, stream);
+        });
+        rtcpeerconnection.setRemoteDescription(offer);
+        rtcpeerconnection.createAnswer().then((answer) => {
+            rtcpeerconnection.setLocalDescription(answer);
+            chatSocket.send(
+                JSON.stringify({
+                    command: "answer",
+                    answer: answer,
+                    room: window.group_name,
+                })
+            );
+        });
+    }
+
+    // chatSocket.onmessage = function (message) {
+    //     var data = JSON.parse(message.data)
+        
+    //     if (data['command'] == 'video'){
+    //         if(isCreated){
+    //         console.log('clicking the btn')
+    //         call_btn.click()
+    //     }
+    //     }
+    // }
 
 </script>
 

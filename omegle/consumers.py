@@ -21,6 +21,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         user1_id = await create_user()
         user1 = await get_user(user1_id)
         self.id = user1_id
+        self.name = None
         print(f'user - {user1} is connected')
         print(f'Adding user - {user1} to waiting List')
         added = await adding_user_to_waiting(user1)
@@ -40,10 +41,12 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 print('user2_fetched')
             if fetched_user1 and fetched_user2:
                 group_name = await create_group(fetched_user1, fetched_user2)
+                self.name = 'user1'
                 print('The Group is created')
         else:
             added = await adding_user_to_waiting(user1)
             print('User2 was not present in the WL so added User1 again')
+            self.name = 'user2'
         
         while True:
             group_name = await fetch_group(user1)
@@ -59,7 +62,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             await self.send_json({
                 'join' : group_name,
                 'user1_id' : str(user1.id),
-                'user1' : 'user1',
+                # 'user2_id' : str(user2.id),
+                'user' : self.name,
                 'spinner' : 'You are now Connected with a Stranger'
             })
 
@@ -84,9 +88,64 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 await self.send_bar_stop(content['group_name'], content['display'], content['user_id'])
             elif command == 'skip':
                 await self.disconnect(0)
+            elif(command == 'offer'):
+                await self.channel_layer.group_send(
+                str(content['room']),
+                {
+                'type':'offer.message',
+                'offer':content['offer']
+                }
+                )
+            elif(content['command'] == 'answer'):
+                await self.channel_layer.group_send(
+                str(content['room']),
+                {
+                'type':'answer.message',
+                'answer':content['answer']
+            })
+            elif(content['command'] == 'candidate'):
+                await self.channel_layer.group_send(
+                str(content['room']),
+                {
+                'type':'candidate.message',
+                'candidate':content['candidate'],
+                'iscreated':content['iscreated']
+            })
+            elif(content['command'] == 'video'):
+                await self.channel_layer.group_send(
+                str(content['group_name']),
+                {
+                'type':'video.message',
+                'iscreated':content['iscreated'],
+            })
         except ClientError as e:
             await self.handle_client_error(e)
             print('command stopped here')
+
+    async def video_message(self,event):
+        await self.send_json({
+            'command':'video',
+            'iscreated':event['iscreated']
+        })
+
+    async def offer_message(self,event):
+        await self.send_json({
+            'command':'offer',
+            'offer':event['offer']
+        })
+    
+    async def answer_message(self,event):
+        await self.send_json({
+            'command':'answer',
+            'answer':event['answer']
+        })
+    
+    async def candidate_message(self,event):
+        await self.send_json({
+            'command':'candidate',
+            'candidate':event['candidate'],
+            'iscreated':event['iscreated']
+        })
 
     async def send_room(self, group_name, user1_id, message):
         """
